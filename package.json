@@ -4,12 +4,13 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "mkdir -p dist && cp src/index.js dist/",
+    "build": "esbuild src/index.js --bundle --minify --format=esm --outfile=dist/index.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
   "dependencies": {},
   "devDependencies": {
+    "esbuild": "^0.20.1",
     "wrangler": "^3.0.0"
   }
 }
