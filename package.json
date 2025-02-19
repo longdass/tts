@@ -4,6 +4,12 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "echo 'No build step needed'"
+    "build": "mkdir -p dist && cp src/index.js dist/",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^3.0.0"
   }
 }
