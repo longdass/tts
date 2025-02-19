@@ -1,30 +1,26 @@
-export class TTSState {
-    constructor(state, env) {
-        this.state = state;
-        this.env = env;
-        this.expiredAt = null;
-        this.endpoint = null;
-        this.clientId = "76a75279-2ffa-4c3d-8db8-7b47252aa41c";
-    }
+let expiredAt = null;
+let endpoint = null;
+let clientId = "76a75279-2ffa-4c3d-8db8-7b47252aa41c";
 
-    async fetch(request) {
-        const url = new URL(request.url);
-        const path = url.pathname;
+export default {
+    async fetch(request, env, ctx) {
+        const requestUrl = new URL(request.url);
+        const path = requestUrl.pathname;
 
         if (path === "/tts") {
-            const text = url.searchParams.get("t") || "";
-            const voiceName = url.searchParams.get("v") || "zh-CN-XiaoxiaoMultilingualNeural";
-            const rate = Number(url.searchParams.get("r")) || 0;
-            const pitch = Number(url.searchParams.get("p")) || 0;
-            const outputFormat = url.searchParams.get("o") || "audio-24khz-48kbitrate-mono-mp3";
-            const download = url.searchParams.get("d") || false;
-            const response = await this.getVoice(text, voiceName, rate, pitch, outputFormat, download);
+            const text = requestUrl.searchParams.get("t") || "";
+            const voiceName = requestUrl.searchParams.get("v") || "zh-CN-XiaoxiaoMultilingualNeural";
+            const rate = Number(requestUrl.searchParams.get("r")) || 0;
+            const pitch = Number(requestUrl.searchParams.get("p")) || 0;
+            const outputFormat = requestUrl.searchParams.get("o") || "audio-24khz-48kbitrate-mono-mp3";
+            const download = requestUrl.searchParams.get("d") || false;
+            const response = await getVoice(text, voiceName, rate, pitch, outputFormat, download);
             return response;
         }
 
         if (path === "/voices") {
-            const l = (url.searchParams.get("l") || "").toLowerCase();
-            const f = url.searchParams.get("f");
+            const l = (requestUrl.searchParams.get("l") || "").toLowerCase();
+            const f = requestUrl.searchParams.get("f");
             let response = await voiceList();
             if (l.length > 0) {
                 response = response.filter((item) => item.Locale.toLowerCase().includes(l));
@@ -67,7 +63,7 @@ export class TTSState {
             }
         }
 
-        const baseUrl = request.url.split("://")[0] + "://" + url.host;
+        const baseUrl = request.url.split("://")[0] + "://" + requestUrl.host;
         return new Response(`
         <ol>
         <li> /tts?t=[text]&v=[voice]&r=[rate]&p=[pitch]&o=[outputFormat] <a href="${baseUrl}/tts?t=hello, world&v=zh-CN-XiaoxiaoMultilingualNeural&r=0&p=0&o=audio-24khz-48kbitrate-mono-mp3">try</a> </li>
@@ -79,55 +75,6 @@ export class TTSState {
                 "Content-Type": "text/html; charset=utf-8" 
             } 
         });
-    }
-
-    async getVoice(text, voiceName, rate, pitch, outputFormat, download) {
-        if (!this.expiredAt || Date.now() / 1000 > this.expiredAt - 60) {
-            this.endpoint = await getEndpoint(this.clientId);
-            const jwt = this.endpoint.t.split(".")[1];
-            const decodedJwt = JSON.parse(atob(jwt));
-            this.expiredAt = decodedJwt.exp;
-            const seconds = this.expiredAt - Date.now() / 1000;
-            this.clientId = uuid();
-            console.log("getEndpoint, expiredAt:" + seconds / 60 + "m left");
-        } else {
-            const seconds = this.expiredAt - Date.now() / 1000;
-            console.log("expiredAt:" + seconds / 60 + "m left");
-        }
-
-        const url = `https://${this.endpoint.r}.tts.speech.microsoft.com/cognitiveservices/v1`;
-        const headers = {
-            "Authorization": this.endpoint.t,
-            "Content-Type": "application/ssml+xml",
-            "User-Agent": "okhttp/4.5.0",
-            "X-Microsoft-OutputFormat": outputFormat
-        };
-
-        const ssml = getSsml(text, voiceName, rate, pitch);
-        const response = await fetch(url, {
-            method: "POST",
-            headers: headers,
-            body: ssml
-        });
-
-        if (response.ok) {
-            if (!download) {
-                return response;
-            }
-            const resp = new Response(response.body, response);
-            resp.headers.set("Content-Disposition", `attachment; filename="${uuid()}.mp3"`);
-            return resp;
-        } else {
-            return new Response(response.statusText, { status: response.status });
-        }
-    }
-}
-
-export default {
-    async fetch(request, env, ctx) {
-        const id = env.TTS.idFromName("TTS");
-        const ttsObj = env.TTS.get(id);
-        return ttsObj.fetch(request);
     }
 };
 
@@ -225,4 +172,45 @@ async function bytesToBase64(bytes) {
 
 function uuid() {
     return crypto.randomUUID().replace(/-/g, "");
+}
+
+async function getVoice(text, voiceName, rate, pitch, outputFormat, download) {
+    if (!expiredAt || Date.now() / 1000 > expiredAt - 60) {
+        endpoint = await getEndpoint(clientId);
+        const jwt = endpoint.t.split(".")[1];
+        const decodedJwt = JSON.parse(atob(jwt));
+        expiredAt = decodedJwt.exp;
+        const seconds = expiredAt - Date.now() / 1000;
+        clientId = uuid();
+        console.log("getEndpoint, expiredAt:" + seconds / 60 + "m left");
+    } else {
+        const seconds = expiredAt - Date.now() / 1000;
+        console.log("expiredAt:" + seconds / 60 + "m left");
+    }
+
+    const url = `https://${endpoint.r}.tts.speech.microsoft.com/cognitiveservices/v1`;
+    const headers = {
+        "Authorization": endpoint.t,
+        "Content-Type": "application/ssml+xml",
+        "User-Agent": "okhttp/4.5.0",
+        "X-Microsoft-OutputFormat": outputFormat
+    };
+
+    const ssml = getSsml(text, voiceName, rate, pitch);
+    const response = await fetch(url, {
+        method: "POST",
+        headers: headers,
+        body: ssml
+    });
+
+    if (response.ok) {
+        if (!download) {
+            return response;
+        }
+        const resp = new Response(response.body, response);
+        resp.headers.set("Content-Disposition", `attachment; filename="${uuid()}.mp3"`);
+        return resp;
+    } else {
+        return new Response(response.statusText, { status: response.status });
+    }
 } 
